@@ -41,7 +41,7 @@ function DW_ExportSpriteSheet:Description()
 end
 
 function DW_ExportSpriteSheet:Creator()
-    return DW_ExportSpriteSheet.values.creator or "David"
+    return DW_ExportSpriteSheet.values.creator or ""
 end
 
 function DW_ExportSpriteSheet:UILabel(moho)
