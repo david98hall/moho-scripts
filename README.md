@@ -13,6 +13,8 @@ else that wants frames laid out on a grid.
 
 It shows a small dialog first: start/end frame, output folder, sheet filename, and a creator
 name that gets embedded in the script metadata. Values you type are remembered between runs.
+On macOS it also shows an ImageMagick path field, since that's the only platform where
+Homebrew's install location isn't predictable.
 If you don't set an output folder, it defaults to wherever the project is saved (so save the
 project first, or the script will complain).
 
@@ -39,10 +41,12 @@ Alternatively, drop the file into your Moho scripts folder by hand, keeping the 
 
 ### Requirements
 
-- [ImageMagick](https://imagemagick.org/) — the script defaults to `/usr/local/bin/magick`
-  (where Homebrew puts it on an Intel Mac). If yours lives elsewhere, set the path in the
-  dialog.
-- macOS, in practice. The temp folder handling and shell commands assume a Unix-y system.
+- [ImageMagick](https://imagemagick.org/) version 6 or 7. The script picks a default
+  executable for your platform: Homebrew's `magick` on macOS (Intel or Apple Silicon),
+  the distro package on Linux (`magick` for version 7, the standalone `montage` for
+  version 6), or `magick` on PATH on Windows. On macOS, where the install location is
+  the least predictable, you can override it in the dialog.
+- Verified to work on MacOS. It might work for Windows and Linux.
 
 ## License
 
