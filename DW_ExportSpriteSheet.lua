@@ -20,7 +20,7 @@ function DW_ExportSpriteSheet:Description()
 end
 
 function DW_ExportSpriteSheet:Creator()
-    return "David"
+    return DW_ExportSpriteSheet.values.creator or "David"
 end
 
 function DW_ExportSpriteSheet:UILabel(moho)
@@ -30,23 +30,59 @@ end
 function DW_ExportSpriteSheet:Run(moho)
     local doc = moho.document
 
-    -- Build the dialog
+    -- Default output locations, derived from the saved project path
+    local projPath = doc:Path()
+    local projDir = ""
+    local projBase = "sprite_sheet"
+    if projPath ~= nil and projPath ~= "" then
+        projDir = projPath:gsub("[^/\\]+$", "")
+        projBase = projPath:sub(#projDir + 1):gsub("%.moho$", "")
+        if projBase == "" then projBase = "sprite_sheet" end
+    end
+    local defaultDir = projDir
+    local defaultName = projBase .. "_sheet.png"
+
+    -- Build the dialog (prefilled with the last used values, else defaults)
+    local v = DW_ExportSpriteSheet.values
     local dialog = LM.GUI.SimpleDialog("Export Sprite Sheet", self)
     local layout = dialog:GetLayout()
-    DW_ExportSpriteSheet.ctrls.start = LM.GUI.TextControl(0, tostring(doc:StartFrame()), 0, LM.GUI.FLOAT, "Start frame:")
-    DW_ExportSpriteSheet.ctrls.finish = LM.GUI.TextControl(0, tostring(doc:EndFrame()), 0, LM.GUI.FLOAT, "End frame:")
-    layout:AddChild(DW_ExportSpriteSheet.ctrls.start)
-    layout:AddChild(DW_ExportSpriteSheet.ctrls.finish)
+    local c = DW_ExportSpriteSheet.ctrls
+    c.start = LM.GUI.TextControl(0, tostring(doc:StartFrame()), 0, LM.GUI.FIELD_FLOAT, "Start frame:")
+    c.finish = LM.GUI.TextControl(0, tostring(doc:EndFrame()), 0, LM.GUI.FIELD_FLOAT, "End frame:")
+    c.creator = LM.GUI.TextControl(0, v.creator or "David", 0, LM.GUI.FIELD_TEXT, "Creator:")
+    c.outDir = LM.GUI.TextControl(0, v.outDir or defaultDir, 0, LM.GUI.FIELD_TEXT, "Output folder:")
+    c.sheetName = LM.GUI.TextControl(0, v.sheetName or defaultName, 0, LM.GUI.FIELD_TEXT, "Sheet name:")
+    layout:AddChild(c.start)
+    layout:AddChild(c.finish)
+    layout:AddChild(c.creator)
+    layout:AddChild(c.outDir)
+    layout:AddChild(c.sheetName)
 
     if dialog:DoModal() == 0 then
         return  -- user cancelled
     end
 
     -- Values were stashed by OnOK; fall back to document defaults
-    local startFrame = DW_ExportSpriteSheet.values.start or doc:StartFrame()
-    local endFrame = DW_ExportSpriteSheet.values.finish or doc:EndFrame()
+    local startFrame = v.start or doc:StartFrame()
+    local endFrame = v.finish or doc:EndFrame()
     if endFrame < startFrame then startFrame, endFrame = endFrame, startFrame end
     print("Exporting frames " .. startFrame .. " to " .. endFrame)
+
+    -- Output location: dialog values, else project-derived defaults
+    local outDir = v.outDir or defaultDir
+    local sheetName = v.sheetName or defaultName
+    if outDir == "" then
+        print("Error: save the project first or set an output folder.")
+        return
+    end
+    if outDir:sub(-1) == "/" or outDir:sub(-1) == "\\" then
+        outDir = outDir:sub(1, -2)
+    end
+    if sheetName:sub(-4):lower() ~= ".png" then
+        sheetName = sheetName .. ".png"
+    end
+    local exportDir = outDir .. "/" .. sheetName:gsub("%.png$", "") .. "_frames"
+    local sheetPath = outDir .. "/" .. sheetName
 
     local w = doc:Width()
     local h = doc:Height()
@@ -56,15 +92,6 @@ function DW_ExportSpriteSheet:Run(moho)
     local n = 1
     while n * n < frameCount do n = n * 2 end
     local cols, rows = n, n
-
-    local projPath = doc:Path()
-    if projPath == "" or projPath == nil then
-        print("Error: save the project first - cannot determine export path.")
-        return
-    end
-    local base = projPath:gsub("%.moho$", "")
-    local exportDir = base .. "_frames"
-    local sheetPath = base .. "_sheet.png"
 
     -- Create output directory
     os.execute('mkdir -p "' .. exportDir .. '"')
@@ -108,6 +135,16 @@ function DW_ExportSpriteSheet:OnOK()
         if v == nil or v == 0 then v = fallback end
         return math.floor(v)
     end
+    local function readText(ctrl)
+        local s = ctrl:Value()
+        if s == nil then s = "" end
+        s = s:gsub("^%s*(.-)%s*$", "%1")
+        if s == "" then return nil end
+        return s
+    end
     DW_ExportSpriteSheet.values.start = read(c.start, 1)
     DW_ExportSpriteSheet.values.finish = read(c.finish, 0)
+    DW_ExportSpriteSheet.values.creator = readText(c.creator)
+    DW_ExportSpriteSheet.values.outDir = readText(c.outDir)
+    DW_ExportSpriteSheet.values.sheetName = readText(c.sheetName)
 end
