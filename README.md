@@ -43,3 +43,7 @@ Alternatively, drop the file into your Moho scripts folder by hand, keeping the 
   (where Homebrew puts it on an Intel Mac). If yours lives elsewhere, set the path in the
   dialog.
 - macOS, in practice. The temp folder handling and shell commands assume a Unix-y system.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
