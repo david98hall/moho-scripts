@@ -7,12 +7,24 @@ DW_ExportSpriteSheet = {}
 DW_ExportSpriteSheet.values = {}
 DW_ExportSpriteSheet.ctrls = {}
 
+-- Random v4-style GUID, used to name the temporary frame folder so
+-- concurrent runs never collide and old leftovers are easy to spot.
+local function GUID()
+    math.randomseed(os.time() + math.floor(os.clock() * 1000000))
+    local template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
+    return (template:gsub("[xy]", function(c)
+        local r = math.random(0, 15)
+        local v = (c == "x") and r or (r % 4 + 8)
+        return string.format("%x", v)
+    end))
+end
+
 function DW_ExportSpriteSheet:Name()
     return "Export Sprite Sheet"
 end
 
 function DW_ExportSpriteSheet:Version()
-    return "2.1"
+    return "2.2"
 end
 
 function DW_ExportSpriteSheet:Description()
@@ -81,7 +93,6 @@ function DW_ExportSpriteSheet:Run(moho)
     if sheetName:sub(-4):lower() ~= ".png" then
         sheetName = sheetName .. ".png"
     end
-    local exportDir = outDir .. "/" .. sheetName:gsub("%.png$", "") .. "_frames"
     local sheetPath = outDir .. "/" .. sheetName
 
     local w = doc:Width()
@@ -93,7 +104,12 @@ function DW_ExportSpriteSheet:Run(moho)
     while n * n < frameCount do n = n * 2 end
     local cols, rows = n, n
 
-    -- Create output directory
+    -- Create the output directory and a hidden temp folder (unique GUID
+    -- name) that holds the rendered frames only until the sheet is packed
+    os.execute('mkdir -p "' .. outDir .. '"')
+    local tmpBase = os.getenv("TMPDIR") or "/tmp/"
+    if tmpBase:sub(-1) ~= "/" then tmpBase = tmpBase .. "/" end
+    local exportDir = tmpBase .. ".DW_ExportSpriteSheet_" .. GUID()
     os.execute('mkdir -p "' .. exportDir .. '"')
 
     -- 1) Render each frame
@@ -103,9 +119,11 @@ function DW_ExportSpriteSheet:Run(moho)
     end
 
     -- 2) Pack with ImageMagick (hardcoded known-good path from `which magick`)
+    --    +label stops montage from drawing filename labels under each frame,
+    --    which would need a font and add extra pixels to the sheet
     local magick = "/usr/local/bin/magick"
     local cmd = string.format(
-        '"%s" montage "%s/frame_*.png" -tile %dx%d -geometry %dx%d+0+0 -background none "%s"',
+        '"%s" montage +label "%s/frame_*.png" -tile %dx%d -geometry %dx%d+0+0 -background none "%s"',
         magick, exportDir, cols, rows, w, h, sheetPath)
     os.execute(cmd)
 
@@ -114,6 +132,7 @@ function DW_ExportSpriteSheet:Run(moho)
     local f = io.open(sheetPath, "r")
     if f then
         f:close()
+        os.execute('rm -rf "' .. exportDir .. '"')
         print(string.format("Done: %d frames (%dx%d) -> %dx%d sheet: %s",
             frameCount, w, h, cols * w, rows * h, sheetPath))
     else
@@ -121,6 +140,7 @@ function DW_ExportSpriteSheet:Run(moho)
         local err = handle:read("*a")
         handle:close()
         print("ImageMagick failed. Error output:\n" .. tostring(err))
+        print("Frames were kept for inspection in: " .. exportDir)
     end
 end
 
