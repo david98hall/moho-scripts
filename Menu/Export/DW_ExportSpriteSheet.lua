@@ -99,10 +99,11 @@ function DW_ExportSpriteSheet:Run(moho)
     local h = doc:Height()
     local frameCount = endFrame - startFrame + 1
 
-    -- Power-of-two grid: smallest n where n*n fits all frames
-    local n = 1
-    while n * n < frameCount do n = n * 2 end
-    local cols, rows = n, n
+    -- Near-square grid sized to the frame count: cols*rows fits every
+    -- frame with no extra empty rows, so the sheet is as small as
+    -- possible for the given frame size
+    local cols = math.ceil(math.sqrt(frameCount))
+    local rows = math.ceil(frameCount / cols)
 
     -- Create the output directory and a hidden temp folder (unique GUID
     -- name) that holds the rendered frames only until the sheet is packed
@@ -122,9 +123,22 @@ function DW_ExportSpriteSheet:Run(moho)
     --    +label stops montage from drawing filename labels under each frame,
     --    which would need a font and add extra pixels to the sheet
     local magick = "/usr/local/bin/magick"
+
+    -- Frame size as actually rendered (may differ from doc:Width()/Height()
+    -- if the render settings scale the output); fall back to the document size
+    local fw, fh = w, h
+    local firstFrame = string.format("%s/frame_%04d.png", exportDir, startFrame)
+    local idHandle = io.popen('"' .. magick .. '" identify -format "%w %h" "' .. firstFrame .. '" 2>/dev/null')
+    if idHandle then
+        local idOut = idHandle:read("*a")
+        idHandle:close()
+        local iw, ih = idOut:match("^(%d+)%s+(%d+)")
+        if iw and ih then fw, fh = tonumber(iw), tonumber(ih) end
+    end
+
     local cmd = string.format(
         '"%s" montage +label "%s/frame_*.png" -tile %dx%d -geometry %dx%d+0+0 -background none "%s"',
-        magick, exportDir, cols, rows, w, h, sheetPath)
+        magick, exportDir, cols, rows, fw, fh, sheetPath)
     os.execute(cmd)
 
     -- 3) Verify by checking the output file exists (os.execute's return
@@ -133,8 +147,8 @@ function DW_ExportSpriteSheet:Run(moho)
     if f then
         f:close()
         os.execute('rm -rf "' .. exportDir .. '"')
-        print(string.format("Done: %d frames (%dx%d) -> %dx%d sheet: %s",
-            frameCount, w, h, cols * w, rows * h, sheetPath))
+        print(string.format("Done: %d frames (%dx%d, grid %dx%d) -> %dx%d sheet: %s",
+            frameCount, fw, fh, cols, rows, cols * fw, rows * fh, sheetPath))
     else
         local handle = io.popen(cmd .. " 2>&1")
         local err = handle:read("*a")
