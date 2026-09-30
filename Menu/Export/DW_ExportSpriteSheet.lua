@@ -72,11 +72,13 @@ function DW_ExportSpriteSheet:Run(moho)
     ctrls.creator = LM.GUI.TextControl(0, values.creator or "David", 0, LM.GUI.FIELD_TEXT, "Creator:")
     ctrls.outDir = LM.GUI.TextControl(0, values.outDir or projectDirectory, 0, LM.GUI.FIELD_TEXT, "Output folder:")
     ctrls.sheetName = LM.GUI.TextControl(0, values.sheetName or defaultName, 0, LM.GUI.FIELD_TEXT, "Sheet name:")
+    ctrls.magickPath = LM.GUI.TextControl(0, values.magickPath or "/usr/local/bin/magick", 0, LM.GUI.FIELD_TEXT, "ImageMagick path:")
     layout:AddChild(ctrls.start)
     layout:AddChild(ctrls.finish)
     layout:AddChild(ctrls.creator)
     layout:AddChild(ctrls.outDir)
     layout:AddChild(ctrls.sheetName)
+    layout:AddChild(ctrls.magickPath)
 
     if dialog:DoModal() == 0 then
         return  -- user cancelled
@@ -128,10 +130,10 @@ function DW_ExportSpriteSheet:Run(moho)
         moho:FileRender(framePath(exportDir, frameIndex))
     end
 
-    -- 2) Pack with ImageMagick (hardcoded known-good path from `which magick`)
+    -- 2) Pack with ImageMagick (path from the dialog, else the default)
     --    +label stops montage from drawing filename labels under each frame,
     --    which would need a font and add extra pixels to the sheet
-    local magick = "/usr/local/bin/magick"
+    local magick = values.magickPath or "/usr/local/bin/magick"
 
     -- Frame size as actually rendered (may differ from document:Width()/Height()
     -- if the render settings scale the output); fall back to the document size
@@ -191,4 +193,5 @@ function DW_ExportSpriteSheet:OnOK()
     values.creator = readText(ctrls.creator)
     values.outDir = readText(ctrls.outDir)
     values.sheetName = readText(ctrls.sheetName)
+    values.magickPath = readText(ctrls.magickPath)
 end
