@@ -12,11 +12,20 @@ DW_ExportSpriteSheet.ctrls = {}
 local function GUID()
     math.randomseed(os.time() + math.floor(os.clock() * 1000000))
     local template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
-    return (template:gsub("[xy]", function(c)
-        local r = math.random(0, 15)
-        local v = (c == "x") and r or (r % 4 + 8)
-        return string.format("%x", v)
+    return (template:gsub("[xy]", function(char)
+        local randomValue = math.random(0, 15)
+        local hexValue = (char == "x") and randomValue or (randomValue % 4 + 8)
+        return string.format("%x", hexValue)
     end))
+end
+
+-- Path of the rendered frame for frame number frameIndex inside directory
+local function framePath(directory, frameIndex)
+    return string.format("%s/frame_%04d.png", directory, frameIndex)
+end
+
+local function mkdir(directory)
+    os.execute('mkdir -p "' .. directory .. '"')
 end
 
 function DW_ExportSpriteSheet:Name()
@@ -40,54 +49,54 @@ function DW_ExportSpriteSheet:UILabel(moho)
 end
 
 function DW_ExportSpriteSheet:Run(moho)
-    local doc = moho.document
+    local document = moho.document
 
     -- Default output locations, derived from the saved project path
-    local projPath = doc:Path()
-    local projDir = ""
-    local projBase = "sprite_sheet"
-    if projPath ~= nil and projPath ~= "" then
-        projDir = projPath:gsub("[^/\\]+$", "")
-        projBase = projPath:sub(#projDir + 1):gsub("%.moho$", "")
-        if projBase == "" then projBase = "sprite_sheet" end
+    local projectPath = document:Path()
+    local projectDirectory = ""
+    local projectBaseName = "sprite_sheet"
+    if projectPath ~= nil and projectPath ~= "" then
+        projectDirectory = projectPath:gsub("[^/\\]+$", "")
+        projectBaseName = projectPath:sub(#projectDirectory + 1):gsub("%.moho$", "")
+        if projectBaseName == "" then projectBaseName = "sprite_sheet" end
     end
-    local defaultDir = projDir
-    local defaultName = projBase .. "_sheet.png"
+    local defaultName = projectBaseName .. "_sheet.png"
 
     -- Build the dialog (prefilled with the last used values, else defaults)
-    local v = DW_ExportSpriteSheet.values
+    local values = DW_ExportSpriteSheet.values
     local dialog = LM.GUI.SimpleDialog("Export Sprite Sheet", self)
     local layout = dialog:GetLayout()
-    local c = DW_ExportSpriteSheet.ctrls
-    c.start = LM.GUI.TextControl(0, tostring(doc:StartFrame()), 0, LM.GUI.FIELD_FLOAT, "Start frame:")
-    c.finish = LM.GUI.TextControl(0, tostring(doc:EndFrame()), 0, LM.GUI.FIELD_FLOAT, "End frame:")
-    c.creator = LM.GUI.TextControl(0, v.creator or "David", 0, LM.GUI.FIELD_TEXT, "Creator:")
-    c.outDir = LM.GUI.TextControl(0, v.outDir or defaultDir, 0, LM.GUI.FIELD_TEXT, "Output folder:")
-    c.sheetName = LM.GUI.TextControl(0, v.sheetName or defaultName, 0, LM.GUI.FIELD_TEXT, "Sheet name:")
-    layout:AddChild(c.start)
-    layout:AddChild(c.finish)
-    layout:AddChild(c.creator)
-    layout:AddChild(c.outDir)
-    layout:AddChild(c.sheetName)
+    local ctrls = DW_ExportSpriteSheet.ctrls
+    ctrls.start = LM.GUI.TextControl(0, tostring(document:StartFrame()), 0, LM.GUI.FIELD_FLOAT, "Start frame:")
+    ctrls.finish = LM.GUI.TextControl(0, tostring(document:EndFrame()), 0, LM.GUI.FIELD_FLOAT, "End frame:")
+    ctrls.creator = LM.GUI.TextControl(0, values.creator or "David", 0, LM.GUI.FIELD_TEXT, "Creator:")
+    ctrls.outDir = LM.GUI.TextControl(0, values.outDir or projectDirectory, 0, LM.GUI.FIELD_TEXT, "Output folder:")
+    ctrls.sheetName = LM.GUI.TextControl(0, values.sheetName or defaultName, 0, LM.GUI.FIELD_TEXT, "Sheet name:")
+    layout:AddChild(ctrls.start)
+    layout:AddChild(ctrls.finish)
+    layout:AddChild(ctrls.creator)
+    layout:AddChild(ctrls.outDir)
+    layout:AddChild(ctrls.sheetName)
 
     if dialog:DoModal() == 0 then
         return  -- user cancelled
     end
 
     -- Values were stashed by OnOK; fall back to document defaults
-    local startFrame = v.start or doc:StartFrame()
-    local endFrame = v.finish or doc:EndFrame()
+    local startFrame = values.start or document:StartFrame()
+    local endFrame = values.finish or document:EndFrame()
     if endFrame < startFrame then startFrame, endFrame = endFrame, startFrame end
     print("Exporting frames " .. startFrame .. " to " .. endFrame)
 
     -- Output location: dialog values, else project-derived defaults
-    local outDir = v.outDir or defaultDir
-    local sheetName = v.sheetName or defaultName
+    local outDir = values.outDir or projectDirectory
+    local sheetName = values.sheetName or defaultName
     if outDir == "" then
         print("Error: save the project first or set an output folder.")
         return
     end
-    if outDir:sub(-1) == "/" or outDir:sub(-1) == "\\" then
+    local lastChar = outDir:sub(-1)
+    if lastChar == "/" or lastChar == "\\" then
         outDir = outDir:sub(1, -2)
     end
     if sheetName:sub(-4):lower() ~= ".png" then
@@ -95,8 +104,8 @@ function DW_ExportSpriteSheet:Run(moho)
     end
     local sheetPath = outDir .. "/" .. sheetName
 
-    local w = doc:Width()
-    local h = doc:Height()
+    local documentWidth = document:Width()
+    local documentHeight = document:Height()
     local frameCount = endFrame - startFrame + 1
 
     -- Near-square grid sized to the frame count: cols*rows fits every
@@ -107,16 +116,16 @@ function DW_ExportSpriteSheet:Run(moho)
 
     -- Create the output directory and a hidden temp folder (unique GUID
     -- name) that holds the rendered frames only until the sheet is packed
-    os.execute('mkdir -p "' .. outDir .. '"')
+    mkdir(outDir)
     local tmpBase = os.getenv("TMPDIR") or "/tmp/"
     if tmpBase:sub(-1) ~= "/" then tmpBase = tmpBase .. "/" end
     local exportDir = tmpBase .. ".DW_ExportSpriteSheet_" .. GUID()
-    os.execute('mkdir -p "' .. exportDir .. '"')
+    mkdir(exportDir)
 
     -- 1) Render each frame
-    for i = startFrame, endFrame do
-        moho:SetCurFrame(i)
-        moho:FileRender(string.format("%s/frame_%04d.png", exportDir, i))
+    for frameIndex = startFrame, endFrame do
+        moho:SetCurFrame(frameIndex)
+        moho:FileRender(framePath(exportDir, frameIndex))
     end
 
     -- 2) Pack with ImageMagick (hardcoded known-good path from `which magick`)
@@ -124,36 +133,36 @@ function DW_ExportSpriteSheet:Run(moho)
     --    which would need a font and add extra pixels to the sheet
     local magick = "/usr/local/bin/magick"
 
-    -- Frame size as actually rendered (may differ from doc:Width()/Height()
+    -- Frame size as actually rendered (may differ from document:Width()/Height()
     -- if the render settings scale the output); fall back to the document size
-    local fw, fh = w, h
-    local firstFrame = string.format("%s/frame_%04d.png", exportDir, startFrame)
-    local idHandle = io.popen('"' .. magick .. '" identify -format "%w %h" "' .. firstFrame .. '" 2>/dev/null')
-    if idHandle then
-        local idOut = idHandle:read("*a")
-        idHandle:close()
-        local iw, ih = idOut:match("^(%d+)%s+(%d+)")
-        if iw and ih then fw, fh = tonumber(iw), tonumber(ih) end
+    local frameWidth, frameHeight = documentWidth, documentHeight
+    local firstFrame = framePath(exportDir, startFrame)
+    local identifyHandle = io.popen('"' .. magick .. '" identify -format "%w %h" "' .. firstFrame .. '" 2>/dev/null')
+    if identifyHandle then
+        local identifyOutput = identifyHandle:read("*a")
+        identifyHandle:close()
+        local identifiedWidth, identifiedHeight = identifyOutput:match("^(%d+)%s+(%d+)")
+        if identifiedWidth and identifiedHeight then frameWidth, frameHeight = tonumber(identifiedWidth), tonumber(identifiedHeight) end
     end
 
-    local cmd = string.format(
+    local command = string.format(
         '"%s" montage +label "%s/frame_*.png" -tile %dx%d -geometry %dx%d+0+0 -background none "%s"',
-        magick, exportDir, cols, rows, fw, fh, sheetPath)
-    os.execute(cmd)
+        magick, exportDir, cols, rows, frameWidth, frameHeight, sheetPath)
+    os.execute(command)
 
     -- 3) Verify by checking the output file exists (os.execute's return
     --    value is unreliable in Moho's Lua build)
-    local f = io.open(sheetPath, "r")
-    if f then
-        f:close()
+    local sheetFile = io.open(sheetPath, "r")
+    if sheetFile then
+        sheetFile:close()
         os.execute('rm -rf "' .. exportDir .. '"')
         print(string.format("Done: %d frames (%dx%d, grid %dx%d) -> %dx%d sheet: %s",
-            frameCount, fw, fh, cols, rows, cols * fw, rows * fh, sheetPath))
+            frameCount, frameWidth, frameHeight, cols, rows, cols * frameWidth, rows * frameHeight, sheetPath))
     else
-        local handle = io.popen(cmd .. " 2>&1")
-        local err = handle:read("*a")
-        handle:close()
-        print("ImageMagick failed. Error output:\n" .. tostring(err))
+        local commandHandle = io.popen(command .. " 2>&1")
+        local errorOutput = commandHandle:read("*a")
+        commandHandle:close()
+        print("ImageMagick failed. Error output:\n" .. tostring(errorOutput))
         print("Frames were kept for inspection in: " .. exportDir)
     end
 end
@@ -162,23 +171,24 @@ end
 -- self here is the copy, but DW_ExportSpriteSheet is the shared class
 -- table, so we can reach the controls and publish the typed values.
 function DW_ExportSpriteSheet:OnOK()
-    local c = DW_ExportSpriteSheet.ctrls
-    local function read(ctrl, fallback)
-        local v = tonumber(ctrl:Value())
-        if v == nil then v = ctrl:IntValue() end
-        if v == nil or v == 0 then v = fallback end
-        return math.floor(v)
+    local ctrls = DW_ExportSpriteSheet.ctrls
+    local values = DW_ExportSpriteSheet.values
+    local function read(control, fallback)
+        local frameNumber = tonumber(control:Value())
+        if frameNumber == nil then frameNumber = control:IntValue() end
+        if frameNumber == nil or frameNumber == 0 then frameNumber = fallback end
+        return math.floor(frameNumber)
     end
-    local function readText(ctrl)
-        local s = ctrl:Value()
-        if s == nil then s = "" end
-        s = s:gsub("^%s*(.-)%s*$", "%1")
-        if s == "" then return nil end
-        return s
+    local function readText(control)
+        local text = control:Value()
+        if text == nil then text = "" end
+        text = text:gsub("^%s*(.-)%s*$", "%1")
+        if text == "" then return nil end
+        return text
     end
-    DW_ExportSpriteSheet.values.start = read(c.start, 1)
-    DW_ExportSpriteSheet.values.finish = read(c.finish, 0)
-    DW_ExportSpriteSheet.values.creator = readText(c.creator)
-    DW_ExportSpriteSheet.values.outDir = readText(c.outDir)
-    DW_ExportSpriteSheet.values.sheetName = readText(c.sheetName)
+    values.start = read(ctrls.start, 1)
+    values.finish = read(ctrls.finish, 0)
+    values.creator = readText(ctrls.creator)
+    values.outDir = readText(ctrls.outDir)
+    values.sheetName = readText(ctrls.sheetName)
 end
